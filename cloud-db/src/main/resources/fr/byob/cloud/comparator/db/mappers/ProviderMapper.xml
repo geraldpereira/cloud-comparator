@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//ibatis.apache.org//DTD Mapper 3.0//EN"
+		"http://ibatis.apache.org/dtd/ibatis-3-mapper.dtd">
+<mapper namespace="fr.byob.cloud.comparator.db.mappers.ProviderMapper">
+	
+	<!-- <insert id="insertProvider">
+		insert
+		into provider ( id,location, compute_type,
+		storage_cost,bandwidth_in_cost, bandwidth_out_cost )
+		values (#{id},#{location}, #{computeType}, #{storageCost},
+		#{bandwidthInCost},#{bandwidthOutCost})
+	</insert>
+
+	<insert id="insertSimpleProvider">
+		insert
+		into simple_provider (id, location,
+		ram_cost,cpu_cost)
+		values (#{id}, #{computeType}, #{storageCost},
+		#{bandwidthInCost},#{bandwidthOutCost})
+	</insert>
+
+	<insert id="insertProviderComputeSize">
+		insert
+		into provider ( id, location, size, ram, cpu ,cost )
+		values (#{provider.id}, #{provider.location}, #{size}, #{ram}, #{cpu}, #{cost})
+	</insert> -->
+	
+	<select id="selectAll" resultMap="providerResult">
+		select
+		*
+		from provider P
+		left outer join simple_provider SP on P.id = SP.id and P.location = SP.location
+		left outer join provider_compute_size CS on P.id = CS.id and P.location = CS.location  
+	</select>
+	
+	<select id="selectLocations" resultType="String">
+		select distinct
+		location
+		from provider P  
+	</select>
+	
+	<select id="select" resultMap="providerResult" parameterType="Provider">
+		select
+		*
+		from provider P
+		left outer join simple_provider SP on P.id = SP.id and P.location = SP.location
+		left outer join provider_compute_size CS on P.id = CS.id and P.location = CS.location
+		where
+			P.id like #{id}
+			AND P.location like #{location}
+		limit 1
+	</select>
+	
+	<select id="searchSimples" resultMap="simpleProviderResult" parameterType="ProviderSearchCriteria">
+		select
+		*
+		from provider P
+		join simple_provider SP on P.id = SP.id and P.location = SP.location
+		<where>
+			<if test="location != null">
+				AND P.location like #{location}
+			</if>
+			<if test="cpu != null">
+				AND SP.max_cpu >= #{cpu}
+			</if>
+			<if test="ram != null">
+				AND SP.max_ram >= #{ram}				
+			</if>
+			<if test="storage != null">
+				AND SP.max_storage >= #{storage}			
+			</if>
+		</where>
+	</select>
+	
+	
+	<select id="searchSized" resultMap="sizedProviderResult" parameterType="ProviderSearchCriteria">
+		select * 
+		from provider P
+		join provider_compute_size CS on P.id = CS.id and P.location = CS.location
+		where CS.cost in (SELECT min(cost) FROM provider_compute_size PCS 
+		<where>
+			<if test="location != null">
+				AND (PCS.location like #{location})
+			</if>
+			<if test="cpu != null">
+				AND (PCS.cpu = null OR PCS.cpu >= #{cpu}) 
+			</if>
+			<if test="storage != null">
+				AND (PCS.storage = null OR PCS.storage >= #{storage}) 
+			</if>
+			<if test="ram != null">
+				AND (PCS.ram = null OR PCS.ram >= #{ram})  				
+			</if>
+		</where>
+		<if test="location != null">
+				AND (CS.location like #{location})
+		</if>
+		group by PCS.id,PCS.location)
+	</select>
+
+	<resultMap type="Provider" id="providerResult">
+		<constructor>
+			<idArg column="id" javaType="String"/>
+			<idArg column="location" javaType="String"/>
+		</constructor>
+		<result property="bandwidthInCost" column="bandwidth_in_cost" javaType="BigDecimal"/>
+		<result property="bandwidthOutCost" column="bandwidth_out_cost" javaType="BigDecimal"/>
+		<discriminator javaType="String" column="compute_type">
+			<case value="SIMPLE" resultMap="simpleProviderResult"/>
+			<case value="SIZED" resultMap="sizedProviderResult"/>
+		</discriminator>
+	</resultMap>
+	
+	<resultMap type="SimpleProvider" id="simpleProviderResult" extends="providerResult">
+		<result property="ramCost" column="ram_cost" javaType="BigDecimal"/>
+		<result property="cpuCost" column="cpu_cost" javaType="BigDecimal"/>
+		<result property="storageCost" column="storage_cost" javaType="BigDecimal"/>
+		<result property="maxRam" column="max_ram" javaType="BigDecimal"/>
+		<result property="maxCpu" column="max_cpu" javaType="BigDecimal"/>
+		<result property="maxStorage" column="max_storage" javaType="BigDecimal"/>
+	</resultMap>
+	
+	<resultMap type="SizedProvider" id="sizedProviderResult" extends="providerResult">
+		<collection property="sizes" resultMap="computeSizeResult" />
+	</resultMap>
+	
+	<resultMap type="ProviderComputeSize" id="computeSizeResult">
+		<constructor>
+			<idArg column="size" javaType="String"/>			
+		</constructor>
+		<result property="ram" column="ram" javaType="BigDecimal"/>
+		<result property="cpu" column="cpu" javaType="BigDecimal"/>
+		<result property="storage" column="storage" javaType="BigDecimal"/>
+		<result property="cost" column="cost" javaType="BigDecimal"/>
+	</resultMap>
+</mapper>
